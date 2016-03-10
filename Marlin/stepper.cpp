@@ -30,6 +30,7 @@
 #include "language.h"
 #include "cardreader.h"
 #include "speed_lookuptable.h"
+#include "dac_mcp4728.h"
 #if HAS_DIGIPOTSS
   #include <SPI.h>
 #endif
@@ -1233,6 +1234,82 @@ void digipot_current(uint8_t driver, int current) {
     UNUSED(current);
 #endif
 }
+
+#if ENABLED(DAC_STEPPER_CURRENT)
+bool dac_present = false;
+const uint8_t dac_order[NUM_AXIS] = DAC_STEPPER_ORDER;
+
+int dac_init()
+{
+	mcp4728_init();
+
+	if(mcp4728_simpleCommand(RESET) != 0)
+		return -1;
+
+	dac_present = true;
+
+	mcp4728_setVref_all(DAC_STEPPER_VREF);
+    mcp4728_setGain_all(DAC_STEPPER_GAIN);
+
+	return 0;
+}
+
+void dac_current_percent(uint8_t channel, float val)
+{
+	if(!dac_present) return;
+
+	if(val > 100)
+		val = 100;
+
+	mcp4728_analogWrite(dac_order[channel],
+			val*DAC_STEPPER_MAX/100);
+	mcp4728_simpleCommand(UPDATE);
+}
+
+void dac_current_raw(uint8_t channel, uint16_t val)
+{
+	if(!dac_present) return;
+
+	if(val > DAC_STEPPER_MAX)
+		val = DAC_STEPPER_MAX;
+
+	mcp4728_analogWrite(dac_order[channel], val);
+	mcp4728_simpleCommand(UPDATE);
+}
+
+void dac_print_values()
+{
+	if(!dac_present) return;
+
+	SERIAL_ECHO_START;
+	SERIAL_ECHOLNPGM("Stepper current values [%(Amps)]:");
+	SERIAL_ECHO_START;
+	SERIAL_ECHOPAIR(" X:",
+		100.0*mcp4728_getValue(dac_order[0])/DAC_STEPPER_MAX);
+	SERIAL_ECHOPAIR("(",
+		(((2.048 * mcp4728_getValue(dac_order[0])) / 4096.0) / (8.0 * DAC_STEPPER_SENSE)));
+	SERIAL_ECHOPAIR(") Y:",
+		100.0*mcp4728_getValue(dac_order[1])/DAC_STEPPER_MAX);
+	SERIAL_ECHOPAIR("(",
+		(((2.048 * mcp4728_getValue(dac_order[1])) / 4096.0) / (8.0 * DAC_STEPPER_SENSE)));
+	SERIAL_ECHOPAIR(") Z:",
+		100.0*mcp4728_getValue(dac_order[2])/DAC_STEPPER_MAX);
+	SERIAL_ECHOPAIR("(",
+		(((2.048 * mcp4728_getValue(dac_order[2])) / 4096.0) / (8.0 * DAC_STEPPER_SENSE)));
+	SERIAL_ECHOPAIR(") E:",
+		100.0*mcp4728_getValue(dac_order[3])/DAC_STEPPER_MAX);
+	SERIAL_ECHOPAIR("(",
+		(((2.048 * mcp4728_getValue(dac_order[3])) / 4096.0) / (8.0 * DAC_STEPPER_SENSE)));
+	SERIAL_ECHOLN(")");
+}
+
+void dac_commit_eeprom()
+{
+	if(!dac_present) return;
+
+	mcp4728_eepromWrite();
+}
+#endif
 
 void microstep_init() {
   #if HAS_MICROSTEPS_E1
