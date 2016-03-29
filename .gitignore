@@ -15,4 +15,6 @@ applet/
 *.bak
 *.DS_Store
 *.idea
-marlin\marlin.ino.d
+*.s
+*.i
+*.ii
